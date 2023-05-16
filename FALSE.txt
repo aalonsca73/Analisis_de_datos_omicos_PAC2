@@ -1,0 +1,7 @@
+"","title","geo_accession","characteristics_ch1"
+"GSM74493","pancreas, control diet, replicate 1","GSM74493","pancreas, control diet, male Wistar rat"
+"GSM74494","pancreas, control diet, replicate 2","GSM74494","pancreas, control diet, male Wistar rat"
+"GSM74495","pancreas, control diet, replicate 3","GSM74495","pancreas, control diet, male Wistar rat"
+"GSM74496","pancreas, ethanol diet, replicate 1","GSM74496","pancreas, ethanol diet, male Wistar rat"
+"GSM74497","pancreas, ethanol diet, replicate 2","GSM74497","pancreas, ethanol diet, male Wistar rat"
+"GSM74498","pancreas, ethanol diet, replicate 3","GSM74498","pancreas, ethanol diet, male Wistar rat"

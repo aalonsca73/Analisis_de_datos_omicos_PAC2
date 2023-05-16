@@ -1,0 +1,65 @@
+---
+title: "Análisis de datos ómicos - Segunda prueba de evaluación continua"
+author: "Aràntzazu Alonso Carrasco"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    toc: true
+lang: es
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introducción y objetivos
+
+Para este informe,  analizaremos el conjunto de datos `GDS2107` con la serie `GSE3311`, titulado *Long-term ethanol consumption effect on pancreas*. Este estudio se llevó a cabo utilizando muestras de rata común (*Rattus norvegicus*). El conjunto de datos proporciona información detallada sobre los perfiles de expresión génica en el páncreas de ratas sometidas a consumo prolongado de etanol. A través de este análisis, se busca comprender los cambios moleculares y los procesos biológicos involucrados en la respuesta del páncreas al consumo crónico de etanol.
+
+Con todo, el objetivo de este estudio fue investigar los efectos del consumo crónico de etanol en el tejido pancreático. 
+
+# Métodos
+
+
+
+# Resultado
+
+# Discusión
+
+# Referencias
+
+# Apéndice
+
+```{r}
+#-------------------------------------------------------
+# INSTALLATION OF PACKAGES NEEDED
+#--------------------------------------------------------
+
+if (!require("GEOquery")) 
+  BiocManager::install("GEOquery")
+
+# fileList <- dir()
+# datDirs <- grep("dataset", fileList)
+# dataDirs <- fileList[datDirs]
+
+# load library
+require(GEOquery)
+
+rawData <- getGEO("GSE3311")
+class(rawData[[1]])
+eset <-rawData[[1]]
+#TARGETS
+targets <-pData(eset)[,c("title","geo_accession","characteristics_ch1")]
+
+# Expression Matrix
+expresMat <- exprs(eset)
+colnames(expresMat) <- targets$title
+
+# Save data
+dirName <- paste0("dataset", "GSE3311")
+dir2Save <- ifelse(!dir.exists(dirName),
+                   dir.create(dirName), FALSE) 
+write.csv(targets,file=paste(dir2Save, "txt", sep=".") )
+save(eset, expresMat, targets, file=paste(dir2Save, "Rda", sep="."))
+```
+
