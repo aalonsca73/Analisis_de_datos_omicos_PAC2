@@ -20,7 +20,7 @@ Con todo, el objetivo de este estudio fue investigar los efectos del consumo cr�
 
 # Métodos
 
-
+En este estudio se consideran dos tratamientos (control/etanol) en una única cepa de ratas, por lo que se trata de un diseño en bloques aleatorizados puesto que podemos escoger de forma aleatoria a qué animal se le asigna cada tratamiento. 
 
 # Resultado
 
@@ -30,36 +30,172 @@ Con todo, el objetivo de este estudio fue investigar los efectos del consumo cr�
 
 # Apéndice
 
-```{r}
+```{r paquetes, message=FALSE,warning=FALSE}
 #-------------------------------------------------------
-# INSTALLATION OF PACKAGES NEEDED
+# Instalación de paquetes necesarios
 #--------------------------------------------------------
 
-if (!require("GEOquery")) 
-  BiocManager::install("GEOquery")
+if (!require(BiocManager)) install.packages("BiocManager")
 
-# fileList <- dir()
-# datDirs <- grep("dataset", fileList)
-# dataDirs <- fileList[datDirs]
-
-# load library
-require(GEOquery)
-
-rawData <- getGEO("GSE3311")
-class(rawData[[1]])
-eset <-rawData[[1]]
-#TARGETS
-targets <-pData(eset)[,c("title","geo_accession","characteristics_ch1")]
-
-# Expression Matrix
-expresMat <- exprs(eset)
-colnames(expresMat) <- targets$title
-
-# Save data
-dirName <- paste0("dataset", "GSE3311")
-dir2Save <- ifelse(!dir.exists(dirName),
-                   dir.create(dirName), FALSE) 
-write.csv(targets,file=paste(dir2Save, "txt", sep=".") )
-save(eset, expresMat, targets, file=paste(dir2Save, "Rda", sep="."))
+installifnot <- function (pkg){
+  if (!require(pkg, character.only=T)){
+    BiocManager::install(pkg)
+  }
+}
+installifnot("pd.mogene.1.0.st.v1")
+installifnot("mogene10sttranscriptcluster.db")
+installifnot("oligo")
+installifnot("limma")
+installifnot("Biobase")
+installifnot("arrayQualityMetrics")
+installifnot("genefilter")
+installifnot("annotate")
+installifnot("xtable")
+installifnot("gplots")
+installifnot("GOstats")
+installifnot("gplots")
+installifnot("GEOquery")
+installifnot("rae230a.db")
 ```
+
+```{r directorios}
+workingDir <-getwd()
+dataDir <- file.path(workingDir, "dades")
+resultsDir <- file.path(workingDir, "results")
+```
+
+```{r leeTargets}
+library(Biobase)
+#TARGETS
+targets <-read.csv(file=file.path(dataDir,"targets.csv"), header = TRUE, sep=";") 
+#DEFINE SOME VARIABLES FOR PLOTS
+sampleNames <- as.character(targets$ShortName)
+# Creamos un objeto AnnotatedDataFrame
+targets <- AnnotatedDataFrame(targets)
+```
+
+```{r leeCELFiles}
+CELfiles <- targets$fileName
+rawData <- read.celfiles(file.path(dataDir,CELfiles), phenoData=targets)
+rawData
+```
+
+```{r graficosCalidad}
+#BOXPLOT
+boxplot(rawData, which="all",las=2, main="Intensity distribution of RAW data", 
+        cex.axis=0.5, names=sampleNames)
+
+#HIERARQUICAL CLUSTERING
+clust.euclid.average <- hclust(dist(t(exprs(rawData))),method="average")
+plot(clust.euclid.average, labels=sampleNames, main="Hierarchical clustering of RawData", cex=0.7,  hang=-1)
+
+#PRINCIPAL COMPONENT ANALYSIS
+plotPCA <- function ( X, labels=NULL, colors=NULL, dataDesc="", scale=FALSE, 
+                      formapunts=NULL, myCex=0.8,...)
+{
+  pcX<-prcomp(t(X), scale=scale) # o prcomp(t(X))
+  loads<- round(pcX$sdev^2/sum(pcX$sdev^2)*100,1)
+  xlab<-c(paste("PC1",loads[1],"%"))
+  ylab<-c(paste("PC2",loads[2],"%"))
+  if (is.null(colors)) colors=1
+  plot(pcX$x[,1:2],xlab=xlab,ylab=ylab, col=colors, pch=formapunts, 
+       xlim=c(min(pcX$x[,1])-100000, max(pcX$x[,1])+100000),
+       ylim=c(min(pcX$x[,2])-100000, max(pcX$x[,2])+100000))
+  text(pcX$x[,1],pcX$x[,2], labels, pos=3, cex=myCex)
+  title(paste("Plot of first 2 PCs for expressions in", dataDesc, sep=" "), cex=0.8)
+}
+
+plotPCA(exprs(rawData), labels=sampleNames, dataDesc="raw data",
+        formapunts=c(rep(16,4),rep(17,4)), myCex=0.6)
+```
+
+```{r arrayQM}
+# Avoid re-running it each time  the script is executed.
+rerun <- FALSE
+if(rerun){
+  arrayQualityMetrics(eset,  reporttitle="QC_RawData", force=TRUE)
+}
+```
+
+```{r normalizacion}
+# Normalización
+eset<-rma(rawData)
+write.exprs(eset, file.path(resultsDir, "NormData.txt"))
+eset
+```
+
+```{r filtrado}
+# Filtrado
+library(genefilter)
+library(rae230a.db)
+annotation(eset) <- "rae230a.db"
+eset_filtered <- nsFilter(eset, var.func=IQR,
+         var.cutoff=0.75, var.filter=TRUE, require.entrez = TRUE,
+         filterByQuantile=TRUE)
+#NUMBER OF GENES REMOVED
+print(eset_filtered)
+
+#NUMBER OF GENES IN
+print(eset_filtered$eset)
+```
+
+```{r Datosfiltrados}
+filteredEset <- eset_filtered$eset
+filteredData <- exprs(filteredEset)
+colnames(filteredData) <- pData(eset_filtered$eset)$ShortName
+```
+
+```{r linearModel}
+# Matriz de diseño
+library(limma)
+treat <- pData(filteredEset)$grupos
+lev <- factor(treat, levels = unique(treat))
+design <-model.matrix(~0+lev)
+colnames(design) <- levels(lev)
+rownames(design) <- sampleNames
+print(design)
+```
+
+```{r linearModel2}
+#COMPARISON
+cont.matrix1 <- makeContrasts( 
+        Ethanol.vs.control = ethanol_diet-control_diet,
+        levels = design)
+comparisonName <- "Efecto del etanol"
+print(cont.matrix1)
+```
+
+```{r estimaModelo}
+#MODEL FIT
+fit1 <- lmFit(filteredData, design)
+fit.main1 <- contrasts.fit(fit1, cont.matrix1)
+fit.main1 <- eBayes(fit.main1)
+```
+
+```{r results1}
+topTab <-  topTable (fit.main1, number=nrow(fit.main1), coef="Ethanol.vs.control", adjust="fdr",lfc=1, p.value=0.05)
+dim(topTab)
+head(topTab)
+```
+
+```{r}
+# Anotar 
+library(AnnotationDbi)
+keytypes(rae230a.db)
+valid_keys <- keys(org.Rn.eg.db)
+anotaciones <- AnnotationDbi::select(rae230a.db, keys = rownames(filteredData), columns = c("ENTREZID","SYMBOL"))
+```
+
+```{r}
+library(dplyr)
+topTabAnotada <- topTab %>%  
+  mutate(PROBEID=rownames(topTab)) %>%
+  left_join(anotaciones) %>% 
+  arrange(P.Value) %>%
+  select(7,8,9, 1:6)
+
+head(topTabAnotada)
+```
+
+
 
